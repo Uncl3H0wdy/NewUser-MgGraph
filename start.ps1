@@ -126,7 +126,7 @@ while($true){
  }
 
  foreach($dl in $dlNames){
-    Add-DistributionGroupMember -Identity $dl -Member $user
+    Add-DistributionGroupMember -Identity $dl -Member $user.UserPrincipalName
     Write-Host "User added to '$dl'" -ForegroundColor Green
  }
 
