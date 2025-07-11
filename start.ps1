@@ -12,9 +12,9 @@ foreach ($module in $requiredModules) {
     } catch {Write-Host "Failed to import ${module}: ${_}`n" -ForegroundColor Red}
 }
 
-Connect-MgGraph -Scopes "Group.ReadWrite.All", "User.Read.All", "Directory.Read.All"
+Connect-MgGraph -Scopes "Group.ReadWrite.All", "User.ReadWrite.All", "Directory.Read.All"
 
-# Function to check if user exists
+# Check if the user exists
 function ValidateAADUser {
     param (
         [Parameter(Mandatory=$true)]
@@ -30,8 +30,6 @@ function ValidateAADUser {
         return $false
     }
 }
-
-# ValidateRBAC
 
 # Use regex to check the format of the UPN in valid
 # Validate the user via the ValidateAADUser function
@@ -65,9 +63,7 @@ $dlNames = @('DL All Users')
 # Loop until the user selects a valid number
 while($true){
     try {
-         # Validates the users input is an integer
          $userInput = [int](Read-Host "Please choose from one of the following:`n1: The user reports to the CEO.`n2: The user has direct reports.`n3: None of the above.")
-         
          # Checks if the input matches exactly '1', '2' or '3'
          if($userInput -match '\b[1-3]\b'){
              # Check the value of $doneSafe and add it to the $groups Array
@@ -82,18 +78,13 @@ while($true){
  }
 
 foreach ($groupName in $groupNames) {
-
     # Retrieve the group by name
     $group = Get-MgGroup -Filter "displayName eq '$groupName'"
     [string]$groupId = $group.id
     if ($group) {
-        try {
-            # Create the reference body to add the user
+        try { 
             $body = @{"@odata.id" = "https://graph.microsoft.com/v1.0/directoryObjects/$($user.Id)"}
-
-            # Add the user to the group
             New-MgGroupMemberByRef -GroupId $groupId -BodyParameter $body
-
             Write-Host "$($user.DisplayName) successfully added to '$($group.DisplayName)'" -ForegroundColor Green
         } catch {Write-Host "Error adding to '$groupName': $_" -ForegroundColor Red}
     } else {Write-Host "Group '$groupName' not found." -ForegroundColor Red}
@@ -129,6 +120,12 @@ while($true){
     Add-DistributionGroupMember -Identity $dl -Member $user.UserPrincipalName
     Write-Host "User added to '$dl'" -ForegroundColor Green
  }
+
+ try{
+    # Assign Vivia Insights License via SKU
+    Set-MgUserLicense -UserId $user.Id -AddLicenses @{SkuId = 'b622badb-1b45-48d5-920f-4b27a2c0996c'} -RemoveLicenses @()
+    Write-Host "Assigend Microsoft Viva Insights License" -ForegroundColor Green
+ }catch{Write-Host $_}
 
 
 
