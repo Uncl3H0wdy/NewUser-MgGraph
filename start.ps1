@@ -96,7 +96,7 @@ try{
     Write-Host "Usage location has been set" -ForegroundColor Green
 }catch{Write-Host $_}
 
-Connect-ExchangeOnline
+Connect-ExchangeOnline -DisableWAM
 
 while($true){
     try {
