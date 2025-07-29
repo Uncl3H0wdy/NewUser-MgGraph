@@ -77,28 +77,7 @@ while($true){
      catch {Write-Host '*********** Please choose an option from 1 - 3 **********' -ForegroundColor Red}
  }
 
-foreach ($groupName in $groupNames) {
-    # Retrieve the group by name
-    $group = Get-MgGroup -Filter "displayName eq '$groupName'"
-    [string]$groupId = $group.id
-    if ($group) {
-        try { 
-            $body = @{"@odata.id" = "https://graph.microsoft.com/v1.0/directoryObjects/$($user.Id)"}
-            New-MgGroupMemberByRef -GroupId $groupId -BodyParameter $body
-            Write-Host "$($user.DisplayName) successfully added to '$($group.DisplayName)'" -ForegroundColor Green
-        } catch {Write-Host "Error adding to '$groupName': $_" -ForegroundColor Red}
-    } else {Write-Host "Group '$groupName' not found." -ForegroundColor Red}
-}
-
-try{
-    # Set usage location to NZ
-    Update-MgUser -UserId $user.Id -UsageLocation "NZ"
-    Write-Host "Usage location has been set" -ForegroundColor Green
-}catch{Write-Host $_}
-
-Connect-ExchangeOnline -DisableWAM
-
-while($true){
+ while($true){
     try {
          # Validates the users input is an integer
          $userInput = [int](Read-Host "Select the location of the user:`n1: Wellington.`n2: Auckland.`n3: Christchurch.")
@@ -116,15 +95,38 @@ while($true){
      catch {Write-Host '*********** Please choose an option from 1 - 3 **********' -ForegroundColor Red}
  }
 
+foreach ($groupName in $groupNames) {
+    # Retrieve the group by name
+    $group = Get-MgGroup -Filter "displayName eq '$groupName'"
+    [string]$groupId = $group.id
+    if ($group) {
+        try { 
+            $body = @{"@odata.id" = "https://graph.microsoft.com/v1.0/directoryObjects/$($user.Id)"}
+            New-MgGroupMemberByRef -GroupId $groupId -BodyParameter $body
+            Write-Host "$($user.DisplayName) successfully added to '$($group.DisplayName)' in Entra ID" -ForegroundColor Green
+        } catch {Write-Host "Error adding to '$groupName': $_" -ForegroundColor Red}
+    } else {Write-Host "Group '$groupName' not found." -ForegroundColor Red}
+}
+
+try{
+    # Set usage location to NZ
+    Update-MgUser -UserId $user.Id -UsageLocation "NZ"
+    Write-Host "Usage location has been set to New Zealand in Entra ID" -ForegroundColor Green
+}catch{Write-Host $_}
+
+Connect-ExchangeOnline -DisableWAM -ShowBanner:$false
+
  foreach($dl in $dlNames){
     Add-DistributionGroupMember -Identity $dl -Member $user.UserPrincipalName
-    Write-Host "User added to '$dl'" -ForegroundColor Green
+    Write-Host "$($user.DisplayName) successfully added to '$dl' in Exchange Online" -ForegroundColor Green
  }
 
  try{
     # Assign Vivia Insights License via SKU
-    Set-MgUserLicense -UserId $user.Id -AddLicenses @{SkuId = 'b622badb-1b45-48d5-920f-4b27a2c0996c'} -RemoveLicenses @()
-    Write-Host "Assigend Microsoft Viva Insights License" -ForegroundColor Green
+    Set-MgUserLicense -UserId $user.Id -AddLicenses @{SkuId = '3d957427-ecdc-4df2-aacd-01cc9d519da8'} -RemoveLicenses @()
+    Write-Host "Assigend Microsoft Viva Insights License via M365 Admin Center" -ForegroundColor Green
+    Write-Host "Assigned MS E5 license via AutoPilot Users (Apps) security group" -ForegroundColor Green
+
  }catch{Write-Host $_}
 
 
