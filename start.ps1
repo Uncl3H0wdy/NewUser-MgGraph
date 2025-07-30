@@ -12,7 +12,7 @@ foreach ($module in $requiredModules) {
     } catch {Write-Host "Failed to import ${module}: ${_}`n" -ForegroundColor Red}
 }
 
-Connect-MgGraph -Scopes "Group.ReadWrite.All", "User.ReadWrite.All", "Directory.Read.All", "RoleManagement.Read.Exchange"
+Connect-MgGraph -Scopes "Group.ReadWrite.All", "User.ReadWrite.All", "Directory.Read.All" #"RoleManagement.Read.Exchange"
 
 # Check if the user exists
 function ValidateAADUser {
@@ -122,11 +122,14 @@ Connect-ExchangeOnline -DisableWAM -ShowBanner:$false
  }
 
  try{
+    Start-Sleep -Seconds 5
     # Assign Vivia Insights License via SKU
     Set-MgUserLicense -UserId $user.Id -AddLicenses @{SkuId = '3d957427-ecdc-4df2-aacd-01cc9d519da8'} -RemoveLicenses @()
     Write-Host "Assigend Microsoft Viva Insights License via M365 Admin Center" -ForegroundColor Green
     Write-Host "Assigned MS E5 license via AutoPilot Users (Apps) security group" -ForegroundColor Green
- }catch{Write-Host $_}
+ }catch{
+    Write-Host $_
+ }
 
 # Configure Safe Senders
 $safeSenders = @(
@@ -144,7 +147,9 @@ foreach($sender in $safeSenders){
     try{
         Set-MailboxJunkEmailConfiguration $target.Name -TrustedSendersAndDomains @{Add = $sender}
         Write-Host "Successfully added $sender to the Trusted Senders and Domains list" -ForegroundColor Green
-    }catch{Write-Host $_}
+    }catch{
+        Write-Host $_
+    }
 }
 
 
