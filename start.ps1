@@ -1,5 +1,6 @@
 $requiredModules = @("Microsoft.Graph.Users", "Microsoft.Graph.Groups", "ExchangeOnlineManagement")
 
+# Loop through each module defined in the $requiredModules array and check if its installed and imported.
 foreach ($module in $requiredModules) {
     if (-not (Get-Module -ListAvailable -Name $module)) {
         Write-Host "Installing $module..."
@@ -21,6 +22,7 @@ function ValidateAADUser {
         [string]$UserPrincipalName
     )
 
+    # Check that the user exists. This function is called immediatley after the user inputs the UPN
     try {
         Get-MgUser -UserId $UserPrincipalName -ErrorAction Stop
         Write-Host "User '$UserPrincipalName' exists in Azure AD." -ForegroundColor Green
@@ -32,11 +34,13 @@ function ValidateAADUser {
 }
 
 # Use regex to check the format of the UPN in valid
-# Validate the user via the ValidateAADUser function
 $pattern = '^[a-zA-Z0-9._%+,-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
 $flag = $null
 $user
 $userLocation
+$teamsNumber
+
+# Validates the user's input against the regex defined in $pattern
 do {
     $UserPrincipalName = Read-Host "Enter the user's UPN (Universal Principal Name)"
     if ($UserPrincipalName -notmatch $pattern) {
@@ -44,12 +48,13 @@ do {
         continue
     }
     try {
+        # Function call which validates the user object exists in Entra
         $flag = ValidateAADUser $UserPrincipalName
         $user = Get-MgUser -UserId $UserPrincipalName -ErrorAction Stop
     } catch {$flag = $null}
 } until ($flag)
 
-# Group names to assign
+# Create an array containing the groups to add the user too
 $groupNames = @(
     'sec-azure-zpa-all-users',
     'sec-azure-miro-users',
@@ -95,8 +100,8 @@ while($true){
      catch {Write-Host '*********** Please choose an option from 1 - 3 **********' -ForegroundColor Red}
  }
 
+# Loops through each value in $groupName array and adds the user to it. This is done using the RESTful API call passing $user.Id as the paramater
 foreach ($groupName in $groupNames) {
-    # Retrieve the group by name
     $group = Get-MgGroup -Filter "displayName eq '$groupName'"
     [string]$groupId = $group.id
     if ($group) {
@@ -114,16 +119,20 @@ try{
     Write-Host "Usage location has been set to New Zealand in Entra ID" -ForegroundColor Green
 }catch{Write-Host $_}
 
+# Pause for 5 seconds to avoid DDOS suspicion
+Start-Sleep -Seconds 2
 Connect-ExchangeOnline -DisableWAM -ShowBanner:$false
 
- foreach($dl in $dlNames){
+# Loop through the $dlNames array and add the user to each DL
+foreach($dl in $dlNames){
     Add-DistributionGroupMember -Identity $dl -Member $user.UserPrincipalName
     Write-Host "$($user.DisplayName) successfully added to '$dl' in Exchange Online" -ForegroundColor Green
  }
 
  try{
+    # Pause for 5 seconds to avoid DDOS suspicion
     Start-Sleep -Seconds 5
-    # Assign Vivia Insights License via SKU
+    # Assign Viva Insights license
     Set-MgUserLicense -UserId $user.Id -AddLicenses @{SkuId = '3d957427-ecdc-4df2-aacd-01cc9d519da8'} -RemoveLicenses @()
     Write-Host "Assigend Microsoft Viva Insights License via M365 Admin Center" -ForegroundColor Green
     Write-Host "Assigned MS E5 license via AutoPilot Users (Apps) security group" -ForegroundColor Green
@@ -131,7 +140,7 @@ Connect-ExchangeOnline -DisableWAM -ShowBanner:$false
     Write-Host $_
  }
 
-# Configure Safe Senders
+# Create an array containing the emails to add to the users TrustedSendersAndDomains properties
 $safeSenders = @(
     "matt.halliday@ampol.com.au",
     "sdm@ampol.com.au",
@@ -143,6 +152,7 @@ $safeSenders = @(
 
 $target = Get-Mailbox $user.UserPrincipalName
 
+# Loop through the $safeSenders array and add each value to the users TrustedSendersAndDomains property in EXO
 foreach($thissender in $safeSenders){
     try{
         Set-MailboxJunkEmailConfiguration $target.Name -TrustedSendersAndDomains @{Add = $thissender}
@@ -151,8 +161,6 @@ foreach($thissender in $safeSenders){
         Write-Host $_
     }
 }
-
-
 
 
 
