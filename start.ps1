@@ -1,3 +1,15 @@
+<#
+    This script does the following:
+    1. Promt for the target user's UPN and validates the input against a regex.
+    2. Verify the UPN object exists in Entra before proceeding.
+    3. Prompts for the location and managerial position and depending. 
+    4. Adds user to Entra Security Groups.
+    5. Adds user to user defined Distribution Groups.
+    6. Sets the usage location to NZ.
+    7. Assigns Viva Insights license.
+    8. Configures users TrustedSendersAndDomains property in Exchange Online.
+#>
+
 $requiredModules = @("Microsoft.Graph.Users", "Microsoft.Graph.Groups", "ExchangeOnlineManagement")
 
 # Loop through each module defined in the $requiredModules array and check if its installed and imported.
