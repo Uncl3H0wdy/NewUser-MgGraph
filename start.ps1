@@ -45,6 +45,43 @@ function ValidateAADUser {
     }
 }
 
+# Function that sets a exponential delay between requests to prevent the Concurrent cONNECTION EXCEPTION
+function Invoke-WithSmartRetry {
+    param  (
+        [Parameter(Mandatory)]
+        [ScriptBlock]$Operation,
+
+        [int]$MaxRetries = 6,
+        [int]$BaseDelaySeconds = 5
+    )
+
+    $retryCount = 0
+    $success = $false
+    while (-not  $success -and $retryCount -lt $MaxRetries) {
+        try {
+            & $Operation
+            $success = $true
+        }
+        catch {
+            $errorMessage = $_.Exception.Message
+            if ($errorMessage -like "*concurrent  requests*") {
+                $retryCount++
+                $jitter = Get-Random  -Minimum  1  -Maximum  5
+                $delay = $BaseDelaySeconds * [math]::Pow(2, $retryCount - 1) + $jitter
+                Write-Warning  "Concurrency  error detected.  Attempt  $retryCount.  Retrying  in $delay  seconds..."
+                Start-Sleep  -Seconds $delay
+            }
+            else {
+                throw  $_   #  Don't  retry  for  other errors
+            }
+        }
+    }
+
+    if (-not $success) {
+        Write-Error  "Operation  failed  after  $MaxRetries retries  due  to  persistent  concurrency issues."
+    }
+}
+
 # Use regex to check the format of the UPN in valid
 $pattern = '^[a-zA-Z0-9._%+,-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
 $flag = $null
@@ -132,7 +169,6 @@ try{
 }catch{Write-Host $_}
 
 # Pause for 5 seconds to avoid DDOS suspicion
-Start-Sleep -Seconds 2
 Connect-ExchangeOnline -DisableWAM -ShowBanner:$false
 
 # Loop through the $dlNames array and add the user to each DL
@@ -141,16 +177,13 @@ foreach($dl in $dlNames){
     Write-Host "$($user.DisplayName) successfully added to '$dl' in Exchange Online" -ForegroundColor Green
  }
 
- try{
-    # Pause for 5 seconds to avoid DDOS suspicion
-    Start-Sleep -Seconds 5
+
+Invoke-WithSmartRetry -Operation {
     # Assign Viva Insights license
     Set-MgUserLicense -UserId $user.Id -AddLicenses @{SkuId = '3d957427-ecdc-4df2-aacd-01cc9d519da8'} -RemoveLicenses @()
     Write-Host "Assigend Microsoft Viva Insights License via M365 Admin Center" -ForegroundColor Green
     Write-Host "Assigned MS E5 license via AutoPilot Users (Apps) security group" -ForegroundColor Green
- }catch{
-    Write-Host $_
- }
+}
 
 # Create an array containing the emails to add to the users TrustedSendersAndDomains properties
 $safeSenders = @(
