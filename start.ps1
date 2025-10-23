@@ -10,22 +10,26 @@
     8. Configures users TrustedSendersAndDomains property in Exchange Online.
 #>
 
+# Check for left over modules and remove to conflicts
+$graphModules  = Get-Module  Microsoft.Graph*  -ListAvailable
+foreach  ($mod  in $graphModules)  {
+      Remove-Module  $mod.Name  -ErrorAction SilentlyContinue
+}
+
 $requiredModules = @("Microsoft.Graph.Users", "Microsoft.Graph.Groups", "ExchangeOnlineManagement")
 
 # Loop through each module defined in the $requiredModules array and check if its installed and imported.
 foreach ($module in $requiredModules) {
-    if (-not (Get-Module -ListAvailable -Name $module)) {
         Write-Host "Installing $module..."
-        Install-Module $module -Scope CurrentUser -Force
-    } else {Write-Host "$module is already installed." -ForegroundColor Green}
-
+        Install-Module $module -Scope CurrentUser -Force -AllowClobber
+    
     try {
         Import-Module $module -Force -ErrorAction Stop
         Write-Host "$module imported successfully.`n" -ForegroundColor Green
     } catch {Write-Host "Failed to import ${module}: ${_}`n" -ForegroundColor Red}
 }
 
-Connect-MgGraph -Scopes "Group.ReadWrite.All", "User.ReadWrite.All", "Directory.Read.All" #"RoleManagement.Read.Exchange"
+Connect-MgGraph -Scopes "Group.ReadWrite.All", "User.ReadWrite.All", "Directory.Read.All" #"RoleManagement.Read.Exchange" -NoWelcome
 
 # Check if the user exists
 function ValidateAADUser {
@@ -42,43 +46,6 @@ function ValidateAADUser {
     } catch {
         Write-Host "User '$UserPrincipalName' does NOT exist in Azure AD." -ForegroundColor Red
         return $false
-    }
-}
-
-# Function that sets a exponential delay between requests to prevent the Concurrent cONNECTION EXCEPTION
-function Invoke-WithSmartRetry {
-    param  (
-        [Parameter(Mandatory)]
-        [ScriptBlock]$Operation,
-
-        [int]$MaxRetries = 6,
-        [int]$BaseDelaySeconds = 5
-    )
-
-    $retryCount = 0
-    $success = $false
-    while (-not  $success -and $retryCount -lt $MaxRetries) {
-        try {
-            & $Operation
-            $success = $true
-        }
-        catch {
-            $errorMessage = $_.Exception.Message
-            if ($errorMessage -like "*concurrent  requests*") {
-                $retryCount++
-                $jitter = Get-Random  -Minimum  1  -Maximum  5
-                $delay = $BaseDelaySeconds * [math]::Pow(2, $retryCount - 1) + $jitter
-                Write-Warning  "Concurrency  error detected.  Attempt  $retryCount.  Retrying  in $delay  seconds..."
-                Start-Sleep  -Seconds $delay
-            }
-            else {
-                throw  $_   #  Don't  retry  for  other errors
-            }
-        }
-    }
-
-    if (-not $success) {
-        Write-Error  "Operation  failed  after  $MaxRetries retries  due  to  persistent  concurrency issues."
     }
 }
 
@@ -156,9 +123,17 @@ foreach ($groupName in $groupNames) {
     if ($group) {
         try { 
             $body = @{"@odata.id" = "https://graph.microsoft.com/v1.0/directoryObjects/$($user.Id)"}
-            New-MgGroupMemberByRef -GroupId $groupId -BodyParameter $body
-            Write-Host "$($user.DisplayName) successfully added to '$($group.DisplayName)' in Entra ID" -ForegroundColor Green
-        } catch {Write-Host "Error adding to '$groupName': $_" -ForegroundColor Red}
+            New-MgGroupMemberByRef -GroupId $groupId -BodyParameter $body -ErrorAction Stop
+            Write-Host "$($user.DisplayName) successfully added to '$($group.DisplayName)' in Entra ID" -ForegroundColor Green           
+        } catch {
+            $errorMessage = $_.Exception.Message
+            # Write-Host  "Raw error  message:  $errorMessage" #Debugging line
+            if($errorMessage -match "One or more added object references already exist"){
+                Write-Host "$($user.DisplayName) is already a member of '$groupName'" -ForegroundColor Yellow
+            }else{
+                Write-Host "An unexpected error occured" -ForegroundColor Red
+            }
+        }
     } else {Write-Host "Group '$groupName' not found." -ForegroundColor Red}
 }
 
@@ -168,44 +143,20 @@ try{
     Write-Host "Usage location has been set to New Zealand in Entra ID" -ForegroundColor Green
 }catch{Write-Host $_}
 
-# Pause for 5 seconds to avoid DDOS suspicion
-Connect-ExchangeOnline -DisableWAM -ShowBanner:$false
+Start-Sleep -Seconds 10
+# Assign Viva Insights license
+Set-MgUserLicense -UserId $user.Id -AddLicenses @{SkuId = '3d957427-ecdc-4df2-aacd-01cc9d519da8'} -RemoveLicenses @()
+Write-Host "Assigend Microsoft Viva Insights License via M365 Admin Center" -ForegroundColor Green
+Write-Host "Assigned MS E5 license via AutoPilot Users (Apps) security group" -ForegroundColor Green
+
+Disconnect-MgGraph
+
+Connect-ExchangeOnline
 
 # Loop through the $dlNames array and add the user to each DL
 foreach($dl in $dlNames){
     Add-DistributionGroupMember -Identity $dl -Member $user.UserPrincipalName
     Write-Host "$($user.DisplayName) successfully added to '$dl' in Exchange Online" -ForegroundColor Green
  }
-
-
-Invoke-WithSmartRetry -Operation {
-    # Assign Viva Insights license
-    Set-MgUserLicense -UserId $user.Id -AddLicenses @{SkuId = '3d957427-ecdc-4df2-aacd-01cc9d519da8'} -RemoveLicenses @()
-    Write-Host "Assigend Microsoft Viva Insights License via M365 Admin Center" -ForegroundColor Green
-    Write-Host "Assigned MS E5 license via AutoPilot Users (Apps) security group" -ForegroundColor Green
-}
-
-# Create an array containing the emails to add to the users TrustedSendersAndDomains properties
-$safeSenders = @(
-    "matt.halliday@ampol.com.au",
-    "sdm@ampol.com.au",
-    "communications@ampol.com.au",
-    "brent.merrick@ampol.com.au",
-    "support@txn.mail.rewardgateway.net",
-    "reply@txn.mail.rewardgateway.net"
-)
-
-$target = Get-Mailbox $user.UserPrincipalName
-
-# Loop through the $safeSenders array and add each value to the users TrustedSendersAndDomains property in EXO
-foreach($thissender in $safeSenders){
-    try{
-        Set-MailboxJunkEmailConfiguration $target.Name -TrustedSendersAndDomains @{Add = $thissender}
-        Write-Host "Successfully added $thissender to the Trusted Senders and Domains list" -ForegroundColor Green
-    }catch{
-        Write-Host $_
-    }
-}
-
 
 
