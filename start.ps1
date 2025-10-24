@@ -10,14 +10,14 @@
     8. Configures users TrustedSendersAndDomains property in Exchange Online.
 #>
 
-<#Install-Module -Name Microsoft.Graph.Users -RequiredVersion 2.32.0 -Force
+Install-Module -Name Microsoft.Graph.Users -RequiredVersion 2.32.0 -Force
 Install-Module -Name Microsoft.Graph.Groups -RequiredVersion 2.32.0 -Force
 Install-Module -Name Microsoft.Graph.Users.Actions -RequiredVersion 2.32.0 -Force
 Install-Module -Name ExchangeOnlineManagement -Force
 Import-Module -Name Microsoft.Graph.Users
 Import-Module -Name Microsoft.Graph.Groups
 Import-Module -Name Microsoft.Graph.Users.Actions
-Import-Module -Name ExchangeOnlineManagement#>
+Import-Module -Name ExchangeOnlineManagement
 
 Connect-MgGraph -Scopes "Group.ReadWrite.All", "User.ReadWrite.All", "Directory.Read.All" -NoWelcome
 
@@ -137,9 +137,23 @@ try{
 
 # Start-Sleep -Seconds 10
 # Assign Viva Insights license
-Set-MgUserLicense -UserId $user.Id -AddLicenses @{SkuId = '3d957427-ecdc-4df2-aacd-01cc9d519da8'} -RemoveLicenses @() | Out-Null
-Write-Host "Assigend Microsoft Viva Insights License via M365 Admin Center" -ForegroundColor Green
-Write-Host "Assigned MS E5 license via AutoPilot Users (Apps) security group" -ForegroundColor Green
+$vivaLicenseSKU = '3d957427-ecdc-4df2-aacd-01cc9d519da8'
+$E5LicenseSKU = '06ebc4ee-1bb5-47dd-8120-11324bc54e06'
+$licenseDetails =  Get-MgUserLicenseDetail  -UserId $user.UserPrincipalName
+
+# Check if the user has an existing license
+if($licenseDetails.SkuId -contains $E5LicenseSKU){
+    Write-Host "E5 License assigned via AutoPilot Users (Apps) security group" -ForegroundColor Green
+}else{
+    Write-Host "$($User.DisplayName) assignment failed via Autopilot group. Please revert to manual allocation" -ForegroundColor Red
+}
+
+if ($licenseDetails.SkuId -contains $vivaLicenseSKU) {
+    Write-Host "$($User.DisplayName) already has a Viva Insights License" -ForegroundColor Yellow
+}else{
+    Set-MgUserLicense -UserId $user.Id -AddLicenses @{SkuId = '3d957427-ecdc-4df2-aacd-01cc9d519da8'} -RemoveLicenses @() | Out-Null
+    Write-Host "Assigend Microsoft Viva Insights License via M365 Admin Center" -ForegroundColor Green
+}
 
 Disconnect-MgGraph *> $null
 
