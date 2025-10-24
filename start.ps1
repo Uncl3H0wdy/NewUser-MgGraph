@@ -10,24 +10,14 @@
     8. Configures users TrustedSendersAndDomains property in Exchange Online.
 #>
 
-# Check for left over modules and remove to conflicts
-$graphModules  = Get-Module  Microsoft.Graph*  -ListAvailable
-foreach  ($mod  in $graphModules)  {
-      Remove-Module  $mod.Name  -ErrorAction SilentlyContinue
-}
-
-$requiredModules = @("Microsoft.Graph.Users", "Microsoft.Graph.Groups", "ExchangeOnlineManagement")
-
-# Loop through each module defined in the $requiredModules array and check if its installed and imported.
-foreach ($module in $requiredModules) {
-        Write-Host "Installing $module..."
-        Install-Module $module -Scope CurrentUser -Force -AllowClobber
-    
-    try {
-        Import-Module $module -Force -ErrorAction Stop
-        Write-Host "$module imported successfully.`n" -ForegroundColor Green
-    } catch {Write-Host "Failed to import ${module}: ${_}`n" -ForegroundColor Red}
-}
+Install-Module -Name Microsoft.Graph.Users -RequiredVersion 2.32.0 -Force
+Install-Module -Name Microsoft.Graph.Groups -RequiredVersion 2.32.0 -Force
+Install-Module -Name Microsoft.Graph.Users.Actions -RequiredVersion 2.32.0 -Force
+Install-Module -Name ExchangeOnlineManagement -Force
+Import-Module -Name Microsoft.Graph.Users
+Import-Module -Name Microsoft.Graph.Groups
+Import-Module -Name Microsoft.Graph.Users.Actions
+Import-Module -Name ExchangeOnlineManagement
 
 Connect-MgGraph -Scopes "Group.ReadWrite.All", "User.ReadWrite.All", "Directory.Read.All" #"RoleManagement.Read.Exchange" -NoWelcome
 
@@ -41,7 +31,7 @@ function ValidateAADUser {
     # Check that the user exists. This function is called immediatley after the user inputs the UPN
     try {
         Get-MgUser -UserId $UserPrincipalName -ErrorAction Stop
-        Write-Host "User '$UserPrincipalName' exists in Azure AD." -ForegroundColor Green
+        Write-Host "Confimred that user '$UserPrincipalName' exists in Azure AD." -ForegroundColor Green
         return $true
     } catch {
         Write-Host "User '$UserPrincipalName' does NOT exist in Azure AD." -ForegroundColor Red
@@ -84,7 +74,7 @@ $dlNames = @('DL All Users')
 # Loop until the user selects a valid number
 while($true){
     try {
-         $userInput = [int](Read-Host "Please choose from one of the following:`n[1]: The user reports to the CEO.`n[2]: The user has direct reports.`n[3]: None of the above.")
+         $userInput = [int](Read-Host "`nPlease choose from one of the following:`n[1]: The user reports to the CEO.`n[2]: The user has direct reports.`n[3]: None of the above.")
          # Checks if the input matches exactly '1', '2' or '3'
          if($userInput -match '\b[1-3]\b'){
              # Check the value of $doneSafe and add it to the $groups Array
@@ -101,7 +91,7 @@ while($true){
  while($true){
     try {
          # Validates the users input is an integer
-         $userInput = [int](Read-Host "Select the location of the user:`n[1]: Wellington.`n[2]: Auckland.`n[3]: Christchurch.")
+         $userInput = [int](Read-Host "`nSelect the location of the user:`n[1]: Wellington.`n[2]: Auckland.`n[3]: Christchurch.")
          
          # Checks if the input matches exactly '1', '2' or '3'
          if($userInput -match '\b[1-3]\b'){
@@ -155,8 +145,16 @@ Connect-ExchangeOnline
 
 # Loop through the $dlNames array and add the user to each DL
 foreach($dl in $dlNames){
-    Add-DistributionGroupMember -Identity $dl -Member $user.UserPrincipalName
-    Write-Host "$($user.DisplayName) successfully added to '$dl' in Exchange Online" -ForegroundColor Green
+    try{
+        Add-DistributionGroupMember -Identity $dl -Member $user.UserPrincipalName -ErrorAction Stop
+        Write-Host "$($user.DisplayName) successfully added to '$dl' in Exchange Online" -ForegroundColor Green
+    }catch{
+        if($errorMessage -match "One or more added object references already exist"){
+            Write-Host "$($user.DisplayName) is already a member of '$dl'" -ForegroundColor Yellow
+        }else{
+            Write-Host "An unexpected error occured - Please continue with manual steps" -ForegroundColor Red
+        }
+    }
  }
 
 
