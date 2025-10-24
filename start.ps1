@@ -10,16 +10,16 @@
     8. Configures users TrustedSendersAndDomains property in Exchange Online.
 #>
 
-Install-Module -Name Microsoft.Graph.Users -RequiredVersion 2.32.0 -Force
+<#Install-Module -Name Microsoft.Graph.Users -RequiredVersion 2.32.0 -Force
 Install-Module -Name Microsoft.Graph.Groups -RequiredVersion 2.32.0 -Force
 Install-Module -Name Microsoft.Graph.Users.Actions -RequiredVersion 2.32.0 -Force
 Install-Module -Name ExchangeOnlineManagement -Force
 Import-Module -Name Microsoft.Graph.Users
 Import-Module -Name Microsoft.Graph.Groups
 Import-Module -Name Microsoft.Graph.Users.Actions
-Import-Module -Name ExchangeOnlineManagement
+Import-Module -Name ExchangeOnlineManagement#>
 
-Connect-MgGraph -Scopes "Group.ReadWrite.All", "User.ReadWrite.All", "Directory.Read.All" #"RoleManagement.Read.Exchange" -NoWelcome
+Connect-MgGraph -Scopes "Group.ReadWrite.All", "User.ReadWrite.All", "Directory.Read.All" -NoWelcome
 
 # Check if the user exists
 function ValidateAADUser {
@@ -31,7 +31,6 @@ function ValidateAADUser {
     # Check that the user exists. This function is called immediatley after the user inputs the UPN
     try {
         Get-MgUser -UserId $UserPrincipalName -ErrorAction Stop
-        Write-Host "Confimred that user '$UserPrincipalName' exists in Azure AD." -ForegroundColor Green
         return $true
     } catch {
         Write-Host "User '$UserPrincipalName' does NOT exist in Azure AD." -ForegroundColor Red
@@ -57,6 +56,7 @@ do {
         # Function call which validates the user object exists in Entra
         $flag = ValidateAADUser $UserPrincipalName
         $user = Get-MgUser -UserId $UserPrincipalName -ErrorAction Stop
+        Clear-Host
     } catch {$flag = $null}
 } until ($flag)
 
@@ -81,6 +81,7 @@ while($true){
              if ($userInput -eq 1) {$groupNames += "DoneSafe Z Executives"}
              elseif($userInput -eq 2){$groupNames += "DoneSafe People Leaders"}
              elseif($userInput -eq 3){$groupNames += 'DoneSafe Leaders of Self'}
+             Clear-Host
              break
          }
          else{Write-Host '*********** Please choose an option from 1 - 3 **********' -ForegroundColor Red}
@@ -99,6 +100,7 @@ while($true){
              if ($userInput -eq 1) {$dlNames += "DL WEL Users"}
              elseif($userInput -eq 2){$dlNames += "DL Te Whare Rama"}
              elseif($userInput -eq 3){$dlNames += 'DL CHC Users'}
+             Clear-Host
              break
          }
          else{Write-Host '*********** Please choose an option from 1 - 3 **********' -ForegroundColor Red}
@@ -133,15 +135,15 @@ try{
     Write-Host "Usage location has been set to New Zealand in Entra ID" -ForegroundColor Green
 }catch{Write-Host $_}
 
-Start-Sleep -Seconds 10
+# Start-Sleep -Seconds 10
 # Assign Viva Insights license
-Set-MgUserLicense -UserId $user.Id -AddLicenses @{SkuId = '3d957427-ecdc-4df2-aacd-01cc9d519da8'} -RemoveLicenses @()
+Set-MgUserLicense -UserId $user.Id -AddLicenses @{SkuId = '3d957427-ecdc-4df2-aacd-01cc9d519da8'} -RemoveLicenses @() | Out-Null
 Write-Host "Assigend Microsoft Viva Insights License via M365 Admin Center" -ForegroundColor Green
 Write-Host "Assigned MS E5 license via AutoPilot Users (Apps) security group" -ForegroundColor Green
 
-Disconnect-MgGraph
+Disconnect-MgGraph *> $null
 
-Connect-ExchangeOnline
+Connect-ExchangeOnline -ShowBanner:$false
 
 # Loop through the $dlNames array and add the user to each DL
 foreach($dl in $dlNames){
