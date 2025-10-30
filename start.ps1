@@ -10,16 +10,20 @@
     8. Configures users TrustedSendersAndDomains property in Exchange Online.
 #>
 
-Install-Module -Name Microsoft.Graph.Users -RequiredVersion 2.32.0 -Force
+Install-Module Microsoft.Graph -RequiredVersion 2.32.0 -Force
+Import-Module Microsoft.Graph
+
+
+<#Install-Module -Name Microsoft.Graph.Users -RequiredVersion 2.32.0 -Force
 Install-Module -Name Microsoft.Graph.Groups -RequiredVersion 2.32.0 -Force
 Install-Module -Name Microsoft.Graph.Users.Actions -RequiredVersion 2.32.0 -Force
 Install-Module -Name ExchangeOnlineManagement -Force
 Import-Module -Name Microsoft.Graph.Users
 Import-Module -Name Microsoft.Graph.Groups
 Import-Module -Name Microsoft.Graph.Users.Actions
-Import-Module -Name ExchangeOnlineManagement
+Import-Module -Name ExchangeOnlineManagement#>
 
-Connect-MgGraph -Scopes "Group.ReadWrite.All", "User.ReadWrite.All", "Directory.Read.All" -NoWelcome
+Connect-MgGraph -Scopes "Group.ReadWrite.All", "User.ReadWrite.All", "Directory.Read.All" -Verbose
 
 # Check if the user exists
 function ValidateAADUser {
@@ -36,6 +40,10 @@ function ValidateAADUser {
         Write-Host "User '$UserPrincipalName' does NOT exist in Azure AD." -ForegroundColor Red
         return $false
     }
+}
+
+function Retry{
+    
 }
 
 # Use regex to check the format of the UPN in valid
@@ -139,13 +147,28 @@ try{
 # Assign Viva Insights license
 $vivaLicenseSKU = '3d957427-ecdc-4df2-aacd-01cc9d519da8'
 $E5LicenseSKU = '06ebc4ee-1bb5-47dd-8120-11324bc54e06'
-$licenseDetails =  Get-MgUserLicenseDetail  -UserId $user.UserPrincipalName
 
-# Check if the user has an existing license
-if($licenseDetails.SkuId -contains $E5LicenseSKU){
-    Write-Host "E5 License assigned via AutoPilot Users (Apps) security group" -ForegroundColor Green
-}else{
-    Write-Host "$($User.DisplayName) assignment failed via Autopilot group. Please revert to manual allocation" -ForegroundColor Red
+# Start-Sleep -Seconds 10
+$maxTries = 10
+$try = 0
+$sleep = $true
+
+while($sleep -and $try -lt $maxTries){
+    $licenseDetails =  Get-MgUserLicenseDetail  -UserId $user.UserPrincipalName
+    $assignedSkuIds = $licenseDetails | Select-Object -ExpandProperty SkuId
+    # Wait until E5 license has been assigned before proceeding
+    if($assignedSkuIds -contains $E5LicenseSKU){
+        Write-Host "`rE5 License successfully assigned via AutoPilot Users (Apps) security group" -ForegroundColor Green
+        $sleep = $false
+    }else{
+        Write-Host -NoNewline "`rVerifying E5 license assignment: Check $($try + 1) of 10" -ForegroundColor Yellow
+        Start-Sleep -Seconds 15
+        $try++
+    }
+}
+
+if($sleep){
+    Write-Host "E5 license assignment failed via Autopilot group. Please revert to manual allocation" -ForegroundColor Red
 }
 
 if ($licenseDetails.SkuId -contains $vivaLicenseSKU) {
