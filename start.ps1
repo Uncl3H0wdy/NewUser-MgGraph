@@ -10,8 +10,8 @@
     8. Configures users TrustedSendersAndDomains property in Exchange Online.
 #>
 
-Install-Module Microsoft.Graph -RequiredVersion 2.32.0 -Force
-Import-Module Microsoft.Graph
+#Install-Module Microsoft.Graph -RequiredVersion 2.32.0 -Force
+#Import-Module Microsoft.Graph
 
 
 <#Install-Module -Name Microsoft.Graph.Users -RequiredVersion 2.32.0 -Force
@@ -23,9 +23,7 @@ Import-Module -Name Microsoft.Graph.Groups
 Import-Module -Name Microsoft.Graph.Users.Actions
 Import-Module -Name ExchangeOnlineManagement#>
 
-Connect-MgGraph -Scopes "Group.ReadWrite.All", "User.ReadWrite.All", "Directory.Read.All" -Verbose
-
-# Check if the user exists
+Connect-MgGraph -Scopes "Group.ReadWrite.All", "User.ReadWrite.All", "Directory.Read.All"
 function ValidateAADUser {
     param (
         [Parameter(Mandatory=$true)]
@@ -40,10 +38,6 @@ function ValidateAADUser {
         Write-Host "User '$UserPrincipalName' does NOT exist in Azure AD." -ForegroundColor Red
         return $false
     }
-}
-
-function Retry{
-    
 }
 
 # Use regex to check the format of the UPN in valid
@@ -85,7 +79,6 @@ while($true){
          $userInput = [int](Read-Host "`nPlease choose from one of the following:`n[1]: The user reports to the CEO.`n[2]: The user has direct reports.`n[3]: None of the above.")
          # Checks if the input matches exactly '1', '2' or '3'
          if($userInput -match '\b[1-3]\b'){
-             # Check the value of $doneSafe and add it to the $groups Array
              if ($userInput -eq 1) {$groupNames += "DoneSafe Z Executives"}
              elseif($userInput -eq 2){$groupNames += "DoneSafe People Leaders"}
              elseif($userInput -eq 3){$groupNames += 'DoneSafe Leaders of Self'}
@@ -104,7 +97,6 @@ while($true){
          
          # Checks if the input matches exactly '1', '2' or '3'
          if($userInput -match '\b[1-3]\b'){
-             # Check the value of $userInput and add the corresponding value to the $dlNames array
              if ($userInput -eq 1) {$dlNames += "DL WEL Users"}
              elseif($userInput -eq 2){$dlNames += "DL Te Whare Rama"}
              elseif($userInput -eq 3){$dlNames += 'DL CHC Users'}
@@ -127,7 +119,6 @@ foreach ($groupName in $groupNames) {
             Write-Host "$($user.DisplayName) successfully added to '$($group.DisplayName)' in Entra ID" -ForegroundColor Green           
         } catch {
             $errorMessage = $_.Exception.Message
-            # Write-Host  "Raw error  message:  $errorMessage" #Debugging line
             if($errorMessage -match "One or more added object references already exist"){
                 Write-Host "$($user.DisplayName) is already a member of '$groupName'" -ForegroundColor Yellow
             }else{
@@ -137,18 +128,17 @@ foreach ($groupName in $groupNames) {
     } else {Write-Host "Group '$groupName' not found." -ForegroundColor Red}
 }
 
+
+
 try{
-    # Set usage location to NZ
     Update-MgUser -UserId $user.Id -UsageLocation "NZ"
     Write-Host "Usage location has been set to New Zealand in Entra ID" -ForegroundColor Green
 }catch{Write-Host $_}
 
-# Start-Sleep -Seconds 10
 # Assign Viva Insights license
 $vivaLicenseSKU = '3d957427-ecdc-4df2-aacd-01cc9d519da8'
 $E5LicenseSKU = '06ebc4ee-1bb5-47dd-8120-11324bc54e06'
 
-# Start-Sleep -Seconds 10
 $maxTries = 10
 $try = 0
 $sleep = $true
@@ -179,7 +169,6 @@ if ($licenseDetails.SkuId -contains $vivaLicenseSKU) {
 }
 
 Disconnect-MgGraph *> $null
-
 Connect-ExchangeOnline -ShowBanner:$false
 
 # Loop through the $dlNames array and add the user to each DL
@@ -195,5 +184,16 @@ foreach($dl in $dlNames){
         }
     }
  }
+# Check safe senders file exists and if so prceed
+ $trustedSendersPath  = "C:\temp\trusted_senders.txt"
+    if(Test-Path $trustedSendersPath){
+        $trustedSenders  = Get-Content  $trustedSendersPath
+        foreach($safeSender in $trustedSenders){     
+            Set-MailboxJunkEmailConfiguration $user.UserPrincipalName -TrustedSendersAndDomains @{Add = $safeSender}
+            Write-Host "Successfully added $safeSender to the Trusted Senders and Domains list" -ForegroundColor Green
+        }
+    }else{
+        Write-Host "The Trusted Senders (trusted_senders.txt) was not found in c:\temp. Skipping..." -ForegroundColor Yellow
+    }
 
 
