@@ -10,8 +10,8 @@
     8. Configures users TrustedSendersAndDomains property in Exchange Online.
 #>
 
-#Install-Module Microsoft.Graph -RequiredVersion 2.32.0 -Force
-#Import-Module Microsoft.Graph
+Install-Module Microsoft.Graph -RequiredVersion 2.32.0 -Force
+Import-Module Microsoft.Graph
 
 
 <#Install-Module -Name Microsoft.Graph.Users -RequiredVersion 2.32.0 -Force
