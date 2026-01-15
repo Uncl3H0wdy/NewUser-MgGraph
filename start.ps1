@@ -181,7 +181,7 @@ function Run {
                 Write-Host "$($user.DisplayName) is already a member of '$dl'" -ForegroundColor Yellow
             }
             else {
-                Write-Host "An unexpected error occured - Please continue with manual steps" -ForegroundColor Red
+                Write-Host "Unable to add $($user.UserPrincipalName) to $($dl) - Please continue with manual steps" -ForegroundColor Red
             }
         }
     }
@@ -198,7 +198,7 @@ function Run {
         Write-Host "The Trusted Senders (trusted_senders.txt) was not found in c:\temp. Skipping..." -ForegroundColor Yellow
     }
 
-    Write-Host "Task complete!" -BackgroundColor White
+    Write-Host "Task complete!" -ForegroundColor Cyan
 }
 
 
