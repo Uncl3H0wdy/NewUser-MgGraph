@@ -61,6 +61,7 @@ function Run {
         'sec-azure-miro-users',
         'AutoPilot Users (Apps)',
         'sec-azure-SSPR-Enable',
+        'sec-azure-papercut',
         'Sec_G_CrossTenantSyncProd'
     )
 
@@ -203,5 +204,3 @@ function Run {
 
 
 Run | Out-Null
-
-
